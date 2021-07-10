@@ -132,19 +132,25 @@ def main():
     print("Title ID: " + titleId)
     images = downloadImages(urls, titleId)
 
-    confThreshold = 0.95
-    nmsThreshold = 0.5
 
-    net = cv2.dnn.readNetFromTensorflow("optimized_hangul_tensorflow.pb", "2350-common-hangul.txt")
+
+    confThreshold = 0.5
+    nmsThreshold = 0.25
+
+    net = cv2.dnn.readNetFromTensorflow("frozen_east_text_detection.pb")
     cvImage = cv2.imread(images[0])
     inputWidth = 320
     inputHeight = 320
     cvWidth = cvImage.shape[1]/float(inputWidth)
     cvHeight = cvImage.shape[0]/float(inputHeight)
+
     blob = cv2.dnn.blobFromImage(cvImage, 1.0, (inputWidth, inputHeight), (123.68, 116.78, 103.94), True, False)
+    outputLayers = []
+    outputLayers.append("feature_fusion/Conv_7/Sigmoid")
+    outputLayers.append("feature_fusion/concat_3")
 
     net.setInput(blob)
-    output = net.forward()
+    output = net.forward(outputLayers)
     scores = output[0]
     geometry = output[1]
     [boxes, confidences] = decode(scores, geometry, confThreshold)
