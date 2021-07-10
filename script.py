@@ -135,12 +135,15 @@ def main():
 
 
     confThreshold = 0.5
-    nmsThreshold = 0.25
+    nmsThreshold = 0.2
+
+    # put this in loop later lol
 
     net = cv2.dnn.readNetFromTensorflow("frozen_east_text_detection.pb")
     cvImage = cv2.imread(images[0])
-    inputWidth = 320
-    inputHeight = 320
+    print(ocr_core(images[0]))
+    inputWidth = round(cvImage.shape[1]/32) * 32
+    inputHeight = round(cvImage.shape[0]/32) * 32
     cvWidth = cvImage.shape[1]/float(inputWidth)
     cvHeight = cvImage.shape[0]/float(inputHeight)
 
@@ -156,20 +159,24 @@ def main():
     [boxes, confidences] = decode(scores, geometry, confThreshold)
 
     indices = cv2.dnn.NMSBoxesRotated(boxes, confidences, confThreshold, nmsThreshold)
+
     for i in indices:
         # get 4 corners of the rotated rect
         vertices = cv2.boxPoints(boxes[i[0]])
+
         # scale the bounding box coordinates based on the respective ratios
+
         for j in range(4):
             vertices[j][0] *= cvWidth
             vertices[j][1] *= cvHeight
         for j in range(4):
             p1 = (int(vertices[j][0]), int(vertices[j][1]))
             p2 = (int(vertices[(j + 1) % 4][0]), int(vertices[(j + 1) % 4][1]))
-            cv2.line(cvImage, p1, p2, (0, 255, 0), 2, cv2.LINE_AA)
+            cv2.line(cvImage, p1, p2, (0, 255, 0), 1, cv2.LINE_AA)
             # cv.putText(frame, "{:.3f}".format(confidences[i[0]]), (vertices[0][0], vertices[0][1]), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, cv.LINE_AA)
 
     cv2.imwrite(scriptPath + "/cvoutput/" + "test.jpg", cvImage)
+
 
     """
     for image in images:
