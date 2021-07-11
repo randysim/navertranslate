@@ -12,7 +12,7 @@ import locate
 import math
 
 debugUrl = "https://m.comic.naver.com/webtoon/detail?titleId=756137&no=17&week=thu&listSortOrder=DESC&listPage=1"
-prod = False
+prod = True
 scriptPath = "C:/Users/phone/PycharmProjects/navertranslate"
 
 tesseractPath = "C:\\Users\\phone\\AppData\\Local\\Programs\\Tesseract-OCR\\tesseract.exe"
@@ -24,7 +24,16 @@ def ocr_core(file):
     """
     This function will handle the core OCR processing of images.
     """
-    text = pytesseract.image_to_string(file, config=options)  # We'll use Pillow's Image class to open the image and pytesseract to detect the string in the image
+    img_ref = cv2.imread(file)
+    # Threshold to obtain binary image
+    thresh = cv2.threshold(img_ref, 220, 255, cv2.THRESH_BINARY)[1]
+
+    # Create custom kernel
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    # Perform closing (dilation followed by erosion)
+    close = cv2.morphologyEx(thresh, cv2.MORPH_CLOSE, kernel)
+
+    text = pytesseract.image_to_string(close, config=options)  # We'll use Pillow's Image class to open the image and pytesseract to detect the string in the image
     return text
 
 def downloadImages(urls, output):
@@ -101,6 +110,11 @@ def main():
         try:
             translated = translate.translate_text(detected)
         except:
+            counter += 1
+            continue
+
+        if (translated[0].startswith("TypeError")):
+            print("COULD NOT GET TRANSLATION")
             counter += 1
             continue
 

@@ -39,7 +39,6 @@ class TranslatedBlurb(Blurb):
 def translate_text(text):
     replaced = text.strip().replace("\n", " ")
     newreplaced = " ".join(replaced.split())
-    translation = ""
 
     encoding = "ascii"
 

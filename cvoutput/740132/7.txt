@@ -1,0 +1,6 @@
+TypeError: Cannot read property '1' of null
+Url: https://translate.google.com/_/TranslateWebserverUi/data/batchexecute?rpcids=MkEWBc&f.sid=98112733212826135&bl=boq_translate-webserver_20210707.08_p0&hl=en-US&soc-app=1&soc-platform=1&soc-device=1&_reqid=3162&rt=c
+    at C:\Users\phone\PycharmProjects\navertranslate\node_modules\@vitalets\google-translate-api\index.js:90:21
+    at processTicksAndRejections (internal/process/task_queues.js:95:5) {
+  code: 'BAD_NETWORK'
+}
