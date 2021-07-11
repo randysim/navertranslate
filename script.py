@@ -122,7 +122,7 @@ def main():
         file.write(translated[0])
         file.close()
 
-        html += "<li><p><img src=\"" + image + "\"></p>" + translated[0] + "</li>"
+        html += "<li><p><img src=\"" + urls[counter] + "\"></p>" + translated[0] + "</li>"
 
         print("DETECTED: " + str(counter) + "/" + str(len(images)))
         counter += 1
