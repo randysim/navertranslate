@@ -7,6 +7,8 @@ except ImportError:
     import Image
 import pytesseract
 import cv2
+import translate
+import locate
 import math
 
 debugUrl = "https://m.comic.naver.com/webtoon/detail?titleId=756137&no=17&week=thu&listSortOrder=DESC&listPage=1"
@@ -18,71 +20,19 @@ pytesseract.pytesseract.tesseract_cmd = tesseractPath
 
 options = "-l {} --psm {}".format("kor", 3)
 
-def decode(scores, geometry, scoreThresh):
-    detections = []
-    confidences = []
-
-    ############ CHECK DIMENSIONS AND SHAPES OF geometry AND scores ############
-    assert len(scores.shape) == 4, "Incorrect dimensions of scores"
-    assert len(geometry.shape) == 4, "Incorrect dimensions of geometry"
-    assert scores.shape[0] == 1, "Invalid dimensions of scores"
-    assert geometry.shape[0] == 1, "Invalid dimensions of geometry"
-    assert scores.shape[1] == 1, "Invalid dimensions of scores"
-    assert geometry.shape[1] == 5, "Invalid dimensions of geometry"
-    assert scores.shape[2] == geometry.shape[2], "Invalid dimensions of scores and geometry"
-    assert scores.shape[3] == geometry.shape[3], "Invalid dimensions of scores and geometry"
-    height = scores.shape[2]
-    width = scores.shape[3]
-    for y in range(0, height):
-
-        # Extract data from scores
-        scoresData = scores[0][0][y]
-        x0_data = geometry[0][0][y]
-        x1_data = geometry[0][1][y]
-        x2_data = geometry[0][2][y]
-        x3_data = geometry[0][3][y]
-        anglesData = geometry[0][4][y]
-        for x in range(0, width):
-            score = scoresData[x]
-
-            # If score is lower than threshold score, move to next x
-            if(score < scoreThresh):
-                continue
-
-            # Calculate offset
-            offsetX = x * 4.0
-            offsetY = y * 4.0
-            angle = anglesData[x]
-
-            # Calculate cos and sin of angle
-            cosA = math.cos(angle)
-            sinA = math.sin(angle)
-            h = x0_data[x] + x2_data[x]
-            w = x1_data[x] + x3_data[x]
-
-            # Calculate offset
-            offset = ([offsetX + cosA * x1_data[x] + sinA * x2_data[x], offsetY - sinA * x1_data[x] + cosA * x2_data[x]])
-
-            # Find points for rectangle
-            p1 = (-sinA * h + offset[0], -cosA * h + offset[1])
-            p3 = (-cosA * w + offset[0],  sinA * w + offset[1])
-            center = (0.5*(p1[0]+p3[0]), 0.5*(p1[1]+p3[1]))
-            detections.append((center, (w,h), -1*angle * 180.0 / math.pi))
-            confidences.append(float(score))
-
-    # Return detections and confidences
-    return [detections, confidences]
-
-def ocr_core(filename):
+def ocr_core(file):
     """
     This function will handle the core OCR processing of images.
     """
-    text = pytesseract.image_to_string(Image.open(filename), config=options)  # We'll use Pillow's Image class to open the image and pytesseract to detect the string in the image
+    text = pytesseract.image_to_string(file, config=options)  # We'll use Pillow's Image class to open the image and pytesseract to detect the string in the image
     return text
 
 def downloadImages(urls, output):
     counter = 1
     images = []
+
+    if not os.path.isdir(scriptPath + "/paneloutput/" + output):
+        os.mkdir(scriptPath + "/paneloutput/" + output)
 
     for url in urls:
         extension = url.split(".")[-1]
@@ -132,59 +82,45 @@ def main():
     print("Title ID: " + titleId)
     images = downloadImages(urls, titleId)
 
-
-
-    confThreshold = 0.9
-    nmsThreshold = 0.2
-
-    # put this in loop later lol (DONE)
-
-    net = cv2.dnn.readNetFromTensorflow("frozen_east_text_detection.pb")
-    outputLayers = []
-    outputLayers.append("feature_fusion/Conv_7/Sigmoid")
-    outputLayers.append("feature_fusion/concat_3")
-
-    counter = 1
-
     if not os.path.isdir(scriptPath + "/cvoutput/" + titleId):
         os.mkdir(scriptPath + "/cvoutput/" + titleId)
 
+    html = "<html>\n<head></head><body><ul>"
+
+    counter = 1
     for image in images:
+        if os.path.isfile(scriptPath + "/cvoutput/" + titleId + "/" + str(counter) + ".txt"):
+            readFile = open(scriptPath + "/cvoutput/" + titleId + "/" + str(counter) + ".txt", "r")
+            readText = readFile.read()
+            html += "<li><p><img src=\"" + image + "\"></p>" + readText + "</li>"
+            counter += 1
+            continue
 
-        cvImage = cv2.imread(image)
-        inputWidth = round(cvImage.shape[1] / 32) * 32
-        inputHeight = round(cvImage.shape[0] / 32) * 32
-        cvWidth = cvImage.shape[1] / float(inputWidth)
-        cvHeight = cvImage.shape[0] / float(inputHeight)
+        detected = ocr_core(image)
 
-        blob = cv2.dnn.blobFromImage(cvImage, 1.0, (inputWidth, inputHeight), (123.68, 116.78, 103.94), True, False)
+        try:
+            translated = translate.translate_text(detected)
+        except:
+            counter += 1
+            continue
 
-        net.setInput(blob)
-        output = net.forward(outputLayers)
-        scores = output[0]
-        geometry = output[1]
-        [boxes, confidences] = decode(scores, geometry, confThreshold)
+        file = open(scriptPath + "/cvoutput/" + titleId + "/" + str(counter) + ".txt", "w", encoding=translated[1])
+        file.write(translated[0])
+        file.close()
 
-        indices = cv2.dnn.NMSBoxesRotated(boxes, confidences, confThreshold, nmsThreshold)
+        html += "<li><p><img src=\"" + image + "\"></p>" + translated[0] + "</li>"
 
-        for i in indices:
-            # get 4 corners of the rotated rect
-            vertices = cv2.boxPoints(boxes[i[0]])
-
-            # scale the bounding box coordinates based on the respective ratios
-
-            for j in range(4):
-                vertices[j][0] *= cvWidth
-                vertices[j][1] *= cvHeight
-            for j in range(4):
-                p1 = (int(vertices[j][0]), int(vertices[j][1]))
-                p2 = (int(vertices[(j + 1) % 4][0]), int(vertices[(j + 1) % 4][1]))
-                cv2.line(cvImage, p1, p2, (0, 255, 0), 1, cv2.LINE_AA)
-                # cv.putText(frame, "{:.3f}".format(confidences[i[0]]), (vertices[0][0], vertices[0][1]), cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1, cv.LINE_AA)
-
-        cv2.imwrite(scriptPath + "/cvoutput/" + titleId + "/" + str(counter) + ".jpg", cvImage)
-        print("DETECTING: " + str(counter) + "/" + str(len(images)))
+        print("DETECTED: " + str(counter) + "/" + str(len(images)))
         counter += 1
+
+    html += "</ui></body></html>"
+
+    print("WRITING HTML FILE")
+
+    htmlFile = open(scriptPath + "/index.html", "w")
+    htmlFile.write(html)
+    htmlFile.close()
+
 
 main()
 
